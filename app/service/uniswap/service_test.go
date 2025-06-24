@@ -23,6 +23,18 @@ func (m *mockClient) GetReserves(ctx context.Context, pool common.Address) (*eth
 	}, nil
 }
 
+func BenchmarkGetAmountOut(b *testing.B) {
+	reserve0, _ := big.NewInt(0).SetString("6897994292349957088357", 0)
+	reserve1, _ := big.NewInt(0).SetString("17580630745241", 0)
+	inputAmount, _ := big.NewInt(0).SetString("10000000000000000000", 0)
+	for i := 0; i < b.N; i++ {
+		out := OutputAmount(inputAmount, reserve0, reserve1)
+		if out == nil {
+			b.FailNow()
+		}
+	}
+}
+
 func TestGetOutputAmount(t *testing.T) {
 	client := &mockClient{}
 	service := NewService(client)

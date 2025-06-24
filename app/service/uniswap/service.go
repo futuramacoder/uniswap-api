@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -14,6 +15,13 @@ var (
 	feeMultiplier = big.NewInt(997)
 	feeDivisor    = big.NewInt(1000)
 )
+
+var bigIntPool = sync.Pool{
+	New: func() interface{} { return new(big.Int) },
+}
+
+func getBigInt() *big.Int  { return bigIntPool.Get().(*big.Int) }
+func putBigInt(b *big.Int) { bigIntPool.Put(b) }
 
 type Service struct {
 	client eth.Eth
@@ -42,19 +50,27 @@ func (s *Service) GetOutputAmount(ctx context.Context, token0Addr, token1Addr, p
 		res0, res1 = res1, res0
 	}
 
-	return s.outputAmount(amount, res0, res1), nil
+	return OutputAmount(amount, res0, res1), nil
 }
 
-func (s *Service) outputAmount(amountIn, reserve0, reserve1 *big.Int) *big.Int {
-	amountInWithFee := new(big.Int).Mul(amountIn, feeMultiplier)
-	numerator := new(big.Int).Mul(amountInWithFee, reserve1)
+func OutputAmount(amountIn, reserve0, reserve1 *big.Int) *big.Int {
+	tmpA := getBigInt()
+	tmpB := getBigInt()
+	tmpC := getBigInt()
+	tmpD := getBigInt()
+	defer func() {
+		putBigInt(tmpA)
+		putBigInt(tmpB)
+		putBigInt(tmpC)
+		putBigInt(tmpD)
+	}()
 
-	denominator := new(big.Int).Add(
-		new(big.Int).Mul(reserve0, feeDivisor),
-		amountInWithFee,
-	)
+	tmpA.Mul(amountIn, feeMultiplier)
+	tmpB.Mul(tmpA, reserve1)
+	tmpC.Mul(reserve0, feeDivisor)
+	tmpD.Add(tmpC, tmpA)
 
-	return new(big.Int).Div(numerator, denominator)
+	return new(big.Int).Div(tmpB, tmpD)
 }
 
 func (s *Service) sortTokens(tkn0, tkn1 common.Address) (common.Address, common.Address) {
